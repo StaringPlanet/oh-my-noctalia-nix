@@ -14,11 +14,11 @@
 
   # my.username comes from ./hosts/<hostname>/default.nix.
   home-manager.users.${config.my.username} = {
-    # Only desktop-independent modules belong here. DMS Home Manager
-    # modules (dank-material-shell / dsearch / dank-calendar) are imported
-    # by the active desktop layer, see modules/desktop/dms-with-niri;
-    # importing them here would leave dms-shell, dsearch, dankcalendar and
-    # fcitx5-dms-theme-sync active under KDE too.
+    # Only desktop-independent modules belong here. A shell's own Home
+    # Manager module is imported by the active desktop layer through
+    # home-manager.sharedModules, see modules/desktop/<name>/system.nix;
+    # importing one here would leave its services and activation steps
+    # active under every other desktop too.
     # Flake HM modules are referenced by this wiring module (which has
     # access to inputs via specialArgs) instead of inside ./home, so HM
     # modules never need an inputs argument; same pattern as the desktop

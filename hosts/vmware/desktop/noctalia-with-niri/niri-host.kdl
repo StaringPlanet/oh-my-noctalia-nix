@@ -1,8 +1,8 @@
 // Host specific niri settings for the noctalia-with-niri desktop on vmware.
 //
-// Included last by the shared config, so these values win. The DMS generated
-// session used the same mode and scale, which keeps the desktop at the size it
-// already had.
+// Included last by the shared config, so these values win. The mode and scale
+// match what the session used before the config became declarative, which keeps
+// the desktop at the size it already had.
 
 output "Virtual-1" {
     mode "2048x1152@60.000"

@@ -11,9 +11,10 @@
 # software GL); MAINTENANCE.md keeps the evidence.
 #
 # dms-greeter runs inside niri instead. niri is built on smithay rather than
-# wlroots and works on this GPU, and dms-greeter reads the existing
+# wlroots and works on this GPU, and dms-greeter reads an existing
 # ~/.config/DankMaterialShell appearance through configHome, so the login screen
-# keeps the look this machine already had.
+# keeps the look this machine already had. That config is left in place on the
+# machines that have it: the greeter is the only remaining consumer.
 #
 # getty@tty2 stays as the escape hatch while the login screen is the fragile
 # part: tty1 belongs to greetd, and a getty instance only starts when it is
@@ -27,7 +28,7 @@
   };
 
   # The module creates the dms-greeter user and group; membership lets this user
-  # reach the greeter cache, same as the dms-with-niri layer.
+  # reach the greeter cache.
   users.users.${config.my.username}.extraGroups = [ "dms-greeter" ];
 
   systemd.services."getty@tty2" = {

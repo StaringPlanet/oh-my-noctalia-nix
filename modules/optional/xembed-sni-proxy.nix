@@ -9,8 +9,8 @@
 # selection on the X server, the icon window stays a standalone Xwayland
 # window that floats in the layout. xembedsniproxy claims that selection,
 # lets those applications embed their icons into it, and re-exports every
-# icon as a StatusNotifierItem, which the Noctalia bar (or the DMS bar) shows
-# like any native tray item.
+# icon as a StatusNotifierItem, which the Noctalia bar shows like any native
+# tray item.
 #
 # The binary comes from plasma-workspace, where Plasma ships the very same
 # bridge. nixpkgs has no standalone xembed-sni-proxy package, and its

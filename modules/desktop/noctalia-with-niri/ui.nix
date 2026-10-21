@@ -11,9 +11,8 @@
 # select the adw-gtk3 theme, which therefore has to exist. Home Manager's copy
 # in the Nix store suffices: the template's own theme lookup walks
 # XDG_DATA_DIRS, which includes /etc/profiles/per-user/<user>/share on NixOS.
-# Unlike DMS, Noctalia does not patch adw-gtk3 stylesheets in place, so the
-# writable copy under ~/.local/share/themes that
-# modules/desktop/dms-with-niri/ui.nix creates is not needed here.
+# Unlike the DMS layer, Noctalia does not patch adw-gtk3 stylesheets in place, so
+# the writable copy under ~/.local/share/themes is not needed here.
 #
 # GTK glass: noctalia-glass-gtk3.css and noctalia-glass-gtk4.css give GTK
 # applications a translucent window background. niri's `background-effect`
@@ -36,8 +35,8 @@
 # deliberately left off: it would replace ~/.config/qt6ct/qt6ct.conf with a
 # read-only store symlink and that selection could no longer be saved.
 #
-# The Qt variables below are the ones the DMS layer sets for the same niri
-# session. They configure the session rather than a file, so they do not block
+# The Qt variables below are the ones the niri session needs for qt5ct/qt6ct.
+# They configure the session rather than a file, so they do not block
 # Noctalia from writing its own colors. Fonts, cursors, the icon theme and the
 # wallpaper files remain in modules/home/defaults/theme.nix.
 

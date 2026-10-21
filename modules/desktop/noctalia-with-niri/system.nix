@@ -54,11 +54,12 @@ in
 
   # niri accepts -c/--config and the NIRI_CONFIG variable, so this desktop reads
   # its own declarative config instead of the default ~/.config/niri/config.kdl
-  # that dms-with-niri owns and rewrites at runtime. Neither desktop can read or
-  # overwrite the other's niri config, and the shared runtime directory keeps
-  # working for the shell that owns it. The unit itself ships with the niri
-  # package; this only adds a drop-in. Runs without the variable (niri validate,
-  # a nested compositor) keep using the default path, so pass -c there.
+  # that the shell it replaced owned and rewrote at runtime. Nothing else
+  # declares that path any more, but keeping this session's config separate
+  # leaves ~/.config/niri/ free for anything else that wants the default path.
+  # The unit itself ships with the niri package; this only adds a drop-in. Runs
+  # without the variable (niri validate, a nested compositor) keep using the
+  # default path, so pass -c there.
   systemd.user.services.niri.environment.NIRI_CONFIG =
     "/home/${config.my.username}/.config/niri-noctalia/config.kdl";
 
@@ -71,14 +72,13 @@ in
   xdg.sounds.enable = true;
 
   # Noctalia unlocks through the PAM service "login" (upstream FAQ: "Why can't I
-  # unlock my lock screen?"), which every NixOS host already provides, so unlike
-  # DMS (security.pam.services.dankshell) there is no dedicated service to
-  # declare here. That also means the lock screen cannot be configured
-  # separately from login itself: modules/optional/howdy.nix disables Howdy on
-  # login because greetd delegates to the same stack, so on hosts that import
-  # it the noctalia lock screen always asks for a password. Enabling Howdy
-  # there again would hand the greeter face authentication as well, which
-  # cannot unlock the GNOME keyring.
+  # unlock my lock screen?"), which every NixOS host already provides, so there
+  # is no dedicated service to declare here. That also means the lock screen
+  # cannot be configured separately from login itself:
+  # modules/optional/howdy.nix disables Howdy on login because greetd delegates
+  # to the same stack, so on hosts that import it the noctalia lock screen always
+  # asks for a password. Enabling Howdy there again would hand the greeter face
+  # authentication as well, which cannot unlock the GNOME keyring.
   #
   # Privileged prompts are answered by Noctalia's own polkit authentication
   # agent, enabled in default.nix (upstream default is off). Nothing competes
@@ -96,10 +96,9 @@ in
   # gpu-screen-recorder is not active in the current environment should be
   # harmless.
   #
-  # Same rule as modules/desktop/dms-with-niri/system.nix. Only one desktop
-  # implementation is imported per host, so the two copies never load together,
-  # and keeping the copy here lets the rule disappear with this desktop instead
-  # of leaking into every other one.
+  # Same rule the removed dms-with-niri layer used to carry. Keeping it in the
+  # desktop layer lets the rule disappear with this desktop instead of leaking
+  # into every other one.
   security.polkit.extraConfig = ''
     polkit.addRule(function(action, subject) {
         if (action.id == "org.freedesktop.policykit.exec" &&

@@ -4,7 +4,7 @@
 #
 # Desktop-independent terminal configuration: which terminals exist and how they
 # look. Colour theming that depends on the running desktop session lives in the
-# desktop module instead (e.g. modules/desktop/dms-with-niri/terminal.nix).
+# desktop module instead (e.g. modules/desktop/noctalia-with-niri/terminal.nix).
 
 {
   # Which terminal "open a terminal" means. xdg-terminal-exec resolves the

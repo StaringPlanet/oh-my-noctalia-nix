@@ -12,9 +12,9 @@
 
 ### `niri-input-portal` 提供 niri 缺失的 InputCapture 门户后端
 
-- **位置：** `overlays/custom-packages.nix` 的 `nix-packages` 条目；`modules/desktop/dms-with-niri/xdg-portals.nix` 与 `modules/desktop/noctalia-with-niri/xdg-portals.nix` 的 `xdg.portal.extraPortals`、`xdg.portal.config` 与 `systemd.user.services`（两个桌面层各留一份同内容配置，因为门户跟随桌面层加载）；`~/.config/niri/config.kdl` 的 `Mod+Shift+Space` 逃生键（该文件由运行时管理，不由 Nix 声明）。包本体与本地补丁 `fix-eis-device-region.patch` 位于 `Mooling0602/nix-packages` 的 `pkgs/by-name/ni/niri-input-portal/`。
+- **位置：** `overlays/custom-packages.nix` 的 `nix-packages` 条目；`modules/desktop/noctalia-with-niri/xdg-portals.nix` 的 `xdg.portal.extraPortals`、`xdg.portal.config` 与 `systemd.user.services`（门户配置跟随桌面层加载，因此留在桌面实现里）；`modules/desktop/noctalia-with-niri/niri-config.kdl` 的 `Mod+Shift+Space` 逃生键。包本体与本地补丁 `fix-eis-device-region.patch` 位于 `Mooling0602/nix-packages` 的 `pkgs/by-name/ni/niri-input-portal/`。
 - **影响：** niri 未实现 `org.freedesktop.impl.portal.InputCapture`，而 `xdg-desktop-portal-gnome` 只在 niri 提供 `org.gnome.Mutter.InputCapture` 时才发布该接口，因此 Deskflow、Synergy 3、Input Leap 等在 niri 下作为 server 共享键鼠时会以 `failed to initialize input capture session` 失败。nixpkgs 未收录该后端，故自行打包并跟踪上游 `main`（上游无 tag 与 release）。
-- **当前处理：** 包经 `nix-packages` 输入进入 `pkgs`；门户路由在 `common` 与 `niri` 两个 section 中把 `InputCapture` 与 `Clipboard` 指向 `niri-input`；`Clipboard` 必须一并路由，否则剪贴板门户会挂到未创建该会话的后端上，客户端随后陷入 create/destroy 死循环。D-Bus 激活单元在 Home Manager 中显式声明，以去掉上游的 `ConditionEnvironment=WAYLAND_DISPLAY`（条件不成立时 systemd 会静默跳过该单元，D-Bus 只报服务名不可激活）。niri 侧的 `Mod+Shift+Space allow-inhibiting=false` 绑定调用 `niri-input-portal --release`：捕获期间指针被锁、键盘被独占，而 niri 会先于客户端处理自己的绑定，因此这是唯一可靠的逃生出口；`dms setup` 重新生成 `config.kdl` 后需要重新添加该绑定。
+- **当前处理：** 包经 `nix-packages` 输入进入 `pkgs`；门户路由在 `common` 与 `niri` 两个 section 中把 `InputCapture` 与 `Clipboard` 指向 `niri-input`；`Clipboard` 必须一并路由，否则剪贴板门户会挂到未创建该会话的后端上，客户端随后陷入 create/destroy 死循环。D-Bus 激活单元在 Home Manager 中显式声明，以去掉上游的 `ConditionEnvironment=WAYLAND_DISPLAY`（条件不成立时 systemd 会静默跳过该单元，D-Bus 只报服务名不可激活）。niri 侧的 `Mod+Shift+Space allow-inhibiting=false` 绑定调用 `niri-input-portal --release`：捕获期间指针被锁、键盘被独占，而 niri 会先于客户端处理自己的绑定，因此这是唯一可靠的逃生出口。该绑定声明在 `niri-config.kdl` 里，随配置一起版本化。
 - **本地补丁：** `fix-eis-device-region.patch` 让后端下发 `ei_device.region`。上游从不下发，而这是 libei 客户端唯一能确定"本机屏幕"尺寸的信息：缺失时 Deskflow 保持 1×1 的屏幕模型，每次捕获激活的光标位置都被压到 `(0, 0)`，该点先满足上边缘判定，于是下边缘与右边缘成为死代码：客户端配在本机下方或右侧时指针切不过去，配在上方反而能用。补丁在 `ConnectToEIS` 时取一次输出布局并集，在创建每个 device 的回调里、`ei_device.done` 之前下发；顺序是硬要求，libei 只在构建 device 时读取 region，协议中没有 region 事件，晚发等同于没发。
 - **上游：** [Qingswe/niri-input-portal](https://github.com/Qingswe/niri-input-portal)；缺口跟踪：niri [#823](https://github.com/YaLTeR/niri/issues/823)（自 2024-11 起 open）、[#1966](https://github.com/YaLTeR/niri/pull/1966)（未合并）。region 必须在 `ei_device.done` 之前下发的旁证是 mutter 的 `483601844b4c72fc34b1818a59fef7879cdb5238`（"backends/eis-client: Do not add device before adding EIS regions"）。
 - **移除条件：** 分两层。补丁层：上游自行下发 `ei_device.region` 后即可删掉 `fix-eis-device-region.patch` 与 `package.nix` 中的 `patches` 一行，包本身继续保留。整包层：niri 自行实现 InputCapture 门户（#823 关闭，或 #1966 及后续工作合并），或该后端被 nixpkgs 收录；此时再移除 overlay 条目、`extraPortals` 中的包、两条门户路由与 systemd 单元。
@@ -159,18 +159,18 @@
 
 ### `qt6ct-kde` 的 KColorScheme 支持
 
-- **位置：** `overlays/qt6ct-kde.nix`，由 `modules/home/defaults/theme.nix`（安装 qt6ct 本体）、`modules/desktop/dms-with-niri/ui.nix`（`platformTheme.name` 与 `QT_QPA_PLATFORMTHEME_QT6`）和 `modules/optional/wine.nix`（`QT_PLUGIN_PATH`）共同使用。
-- **目的：** 为 `qt6ct` 加入 `kconfig`、`kcolorscheme`、`kiconthemes` 构建依赖，并应用 Arch AUR `qt6ct-kde` 的 shenanigans 补丁，使 Qt 配色方案能够使用 KDE 的 `KColorScheme` 支持。DMS 生成的 `DankMatugen.colors` 依赖该能力；覆盖必须位于全局，否则 Niri 实际加载的原生 Qt6ct 平台插件会回退为浅色。
+- **位置：** `overlays/qt6ct-kde.nix`，由 `modules/home/defaults/theme.nix`（安装 qt6ct 本体）、`modules/desktop/noctalia-with-niri/ui.nix`（`QT_QPA_PLATFORMTHEME` / `QT_QPA_PLATFORMTHEME_QT6` 会话变量）和 `modules/optional/wine.nix`（`QT_PLUGIN_PATH`）共同使用。
+- **目的：** 为 `qt6ct` 加入 `kconfig`、`kcolorscheme`、`kiconthemes` 构建依赖，并应用 Arch AUR `qt6ct-kde` 的 shenanigans 补丁，使 Qt 配色方案能够使用 KDE 的 `KColorScheme` 支持。Noctalia 的 `qt` 与 `kcolorscheme` 模板生成的 KDE 配色文件依赖该能力；覆盖必须位于全局，否则 Niri 实际加载的原生 Qt6ct 平台插件会回退为浅色。
 - **相关提交：** `d4c18f6`（`fix: use qt6ct-kde patch instead of vanilla qt6ct`）。
 - **补丁来源：** 固定为 AUR `qt6ct-kde` 提交 [`8c1003e`](https://aur.archlinux.org/cgit/aur.git/plain/qt6ct-shenanigans.patch?h=qt6ct-kde&id=8c1003e13b7e7545e717273e0716f095f195bd13)。原 URL 指向可变分支头，2026-08-18 上游更新补丁后触发固定输出哈希不匹配；更新后的补丁仍针对 `qt6ct 0.11`，保留 KColorScheme、KConfig 和 KIconThemes 集成。
-- **移除条件：** Nixpkgs 的 `qt6ct` 包已原生包含等效补丁和 KDE 依赖，或上游 `qt6ct` 已正式提供等效功能；删除前需确认 DMS 浅色和深色主题切换后的 Qt 应用配色正确。
+- **移除条件：** Nixpkgs 的 `qt6ct` 包已原生包含等效补丁和 KDE 依赖，或上游 `qt6ct` 已正式提供等效功能；删除前需确认 Noctalia 浅色和深色主题切换后的 Qt 应用配色正确。
 - **复查方法：** 更新输入后检查 Nixpkgs 包定义：
 
   ```fish
   nix edit nixpkgs#qt6Packages.qt6ct
   ```
 
-  若功能已上游化，删除此 `overrideAttrs`，构建系统后在图形会话中切换 DMS 主题验证。
+  若功能已上游化，删除此 `overrideAttrs`，构建系统后在图形会话中切换 Noctalia 主题验证。
 
 ### `obs-studio` 的 NVENC/QSV 硬件编码修复
 
@@ -266,55 +266,50 @@
 - **移除条件：** 上游兼容性表原生接受该 DMI 组合；移除前验证 `tuxedo_keyboard`、`clevo_acpi` 和 `/sys/class/leds/rgb:kbd_backlight` 在干净启动后可用。
 - **复查方法：** 检查上游兼容性表是否已有该 DMI 条目，然后运行 `cat /sys/class/leds/rgb:kbd_backlight/{brightness,max_brightness}`。
 
-### Firebat T5K 的 DMS 键盘 RGB 同步
+### Firebat T5K 的键盘 RGB 同步随 DMS 层一并移除
 
-- **位置：** `hosts/mooling-laptop/desktop/dms-with-niri/keyboard-backlight-sync.nix` 的 `dms-keyboard-backlight-sync` systemd service 与 path unit。
-- **影响：** DMS 会在 `~/.local/share/color-schemes/DankMatugen.colors` 写入动态调色板。该服务监听该文件，读取 `Colors:Selection/BackgroundNormal` 并写入 `rgb:kbd_backlight/multi_intensity`；只更新 RGB，不改变键盘背光亮度，也不依赖 TUXEDO Control Center。
-- **上游：** DMS：https://github.com/AvengeMedia/DankMaterialShell ，TUXEDO 键盘接口：https://gitlab.com/tuxedocomputers/development/packages/tuxedo-drivers
-- **移除条件：** DMS 原生支持通过稳定接口控制键盘 RGB。
-- **复查方法：** 重建后切换 DMS 配色，运行 `cat /sys/class/leds/rgb:kbd_backlight/multi_intensity`，确认数值等于 `kreadconfig6 --file ~/.local/share/color-schemes/DankMatugen.colors --group 'Colors:Selection' --key BackgroundNormal` 的逗号替换为空格后的结果；同时确认 `cat /sys/class/leds/rgb:kbd_backlight/brightness` 未变化。
+- **原处理：** `hosts/mooling-laptop/desktop/dms-with-niri/keyboard-backlight-sync.nix` 的 `dms-keyboard-backlight-sync` systemd service 与 path unit，监听 DMS 写出的 `~/.local/share/color-schemes/DankMatugen.colors`，把 `Colors:Selection/BackgroundNormal` 写进 `rgb:kbd_backlight/multi_intensity`。
+- **解除原因：** DMS 桌面层已整体移除，该数据源不再产生。Noctalia 的 kcolorscheme 模板输出 `~/.local/share/color-schemes/noctalia.colors`，需要时可按同样的服务形态重新接一份（同样只写 RGB、不碰亮度）。
+- **现状：** 键盘背光仍由 `tuxedo-drivers`（含 Firebat T5K 的 DMI 白名单）提供，只有 RGB 跟随配色的那部分没有了。
 
-### DMS 的可写 `adw-gtk3` 副本
+### DMS 的可写 `adw-gtk3` 副本随 DMS 层一并移除
 
-- **位置：** `modules/desktop/dms-with-niri/ui.nix` 的 `home.activation.installDmsAdwGtk3`。
-- **影响：** DMS 的 `scripts/gtk.sh` 只在用户可写目录（`~/.local/share/themes/`、`~/.themes/`，以及 `system_theme_roots` 返回的其他用户目录）中查找 `adw-gtk3`，并在 GTK3 的样式表中原地注入 Matugen 色表（`is_user_theme_dir()` 显式排除只读路径，注释说明以 `^/usr` 判定会把 Nix store 路径误判为用户副本）。Home Manager 安装的 `adw-gtk3` 位于只读 Nix store，因而 DMS 无法就地修补；其 GTK3 补丁步骤以退出码 2 结束，随后不会调用将 `gtk-theme` 切换为 `adw-gtk3`/`adw-gtk3-dark` 的刷新逻辑，传统 GTK 应用会停留在浅色主题。
-- **当前处理：** Home Manager 激活时仅在主题不存在时，将 Nix 包的两个变体复制到 `~/.local/share/themes/` 并授予用户写权限。之后目录完全由 DMS 管理；不使用 `home.file`，避免创建 DMS 无法修改的 store symlink。
-- **上游：** [DMS GTK helper](https://github.com/AvengeMedia/DankMaterialShell/blob/master/quickshell/scripts/gtk.sh)，[DMS GTK 切换逻辑](https://github.com/AvengeMedia/DankMaterialShell/blob/master/quickshell/Common/Theme.qml)。
-- **移除条件：** DMS 能通过 `XDG_DATA_DIRS` 使用 Nix store 中的主题，或停止原地修改 `adw-gtk3` 样式表。
-- **复查方法：** 重建后切换一次 DMS 深浅色模式，确认 `dconf read /org/gnome/desktop/interface/gtk-theme` 分别返回 `'adw-gtk3-dark'` 和 `'adw-gtk3'`，并检查两个 `~/.local/share/themes/adw-gtk3*` 目录中的 CSS 末尾含有 `BEGIN DMS OVERRIDE`。
+- **原处理：** `modules/desktop/dms-with-niri/ui.nix` 的 `home.activation.installDmsAdwGtk3`：DMS 只在用户可写目录里查找 `adw-gtk3` 并原地注入 Matugen 色表，Home Manager 安装的只读副本因此需要复制一份到 `~/.local/share/themes/`。
+- **解除原因：** DMS 桌面层已整体移除。Noctalia 只导入 `noctalia.css` 并切换 gtk-theme，不做原地改写，store 中的主题经 `XDG_DATA_DIRS`（含 `/etc/profiles/per-user/<user>/share`）即可被发现，详见 `modules/desktop/noctalia-with-niri/ui.nix`。
+- **删除提交：** 见本次移除 DMS 层的提交。
 
 ### Niri 下 `xdg-desktop-portal` 的深浅色状态同步
 
-- **位置：** `modules/desktop/dms-with-niri/xdg-portals.nix` 与 `modules/desktop/noctalia-with-niri/xdg-portals.nix` 的 `xdg.portal.config` 与 `xdg.dataFile`。
-- **影响：** 桌面 shell 会通过 dconf 写入 `org.gnome.desktop.interface color-scheme`（DMS 自己写入，Noctalia 则由其 gtk3/gtk4 模板的 `apply.sh` 同步），但 `xdg-desktop-portal 1.22` 可同时加载 GTK、GNOME 和 KDE 的 `Settings` 后端，导致门户向 QQ、Telegram、Zen 等应用报告与桌面相反的深浅色状态。
+- **位置：** `modules/desktop/noctalia-with-niri/xdg-portals.nix` 的 `xdg.portal.config` 与 `xdg.dataFile`。
+- **影响：** 桌面 shell 会通过 dconf 写入 `org.gnome.desktop.interface color-scheme`（Noctalia 由其 gtk3/gtk4 模板的 `apply.sh` 同步），但 `xdg-desktop-portal 1.22` 可同时加载 GTK、GNOME 和 KDE 的 `Settings` 后端，导致门户向 QQ、Telegram、Zen 等应用报告与桌面相反的深浅色状态。
 - **当前处理：** 在通用和 Niri 门户配置中将 `org.freedesktop.impl.portal.Settings` 固定为 GTK；同时从用户优先级的 GNOME/KDE portal 定义中去除该接口，仅保留 GTK 作为 Settings 提供方。原定义直接由当前 Nix 包读取，避免手工复制后随上游接口列表漂移。
 - **上游：** xdg-desktop-portal [#2033](https://github.com/flatpak/xdg-desktop-portal/issues/2033)，修复 PR [#2048](https://github.com/flatpak/xdg-desktop-portal/pull/2048)；相关 DMS/Niri 报告 [#2140](https://github.com/AvengeMedia/DankMaterialShell/issues/2140)。
-- **移除条件：** 使用的 `xdg-desktop-portal` 已包含 #2048 的等效修复，且移除两个用户 portal 定义后，DMS 深色时门户仍返回 `uint32 1`、浅色时返回 `uint32 2`，并且应用能动态收到切换通知。
-- **复查方法：** 临时移除两个 `xdg.dataFile` 条目后，重建并重启 `xdg-desktop-portal`；用下列命令分别在 DMS 的深色和浅色模式下检查：
+- **移除条件：** 使用的 `xdg-desktop-portal` 已包含 #2048 的等效修复，且移除两个用户 portal 定义后，桌面深色时门户仍返回 `uint32 1`、浅色时返回 `uint32 2`，并且应用能动态收到切换通知。
+- **复查方法：** 临时移除两个 `xdg.dataFile` 条目后，重建并重启 `xdg-desktop-portal`；用下列命令分别在深色和浅色模式下检查：
 
   ```fish
   gdbus call --session --dest org.freedesktop.portal.Desktop --object-path /org/freedesktop/portal/desktop --method org.freedesktop.portal.Settings.Read org.freedesktop.appearance color-scheme
   ```
 
-### Fcitx5 Plasma 候选窗跟随桌面配色的同步（DMS 与 Noctalia）
+### Fcitx5 Plasma 候选窗跟随 Noctalia 配色的同步
 
-- **位置：** `modules/desktop/dms-with-niri/fcitx-theme-sync.nix`（`fcitx5-dms-theme-sync`）与 `modules/desktop/noctalia-with-niri/fcitx-theme-sync.nix`（`fcitx5-noctalia-theme-sync`）的用户 service 与 path unit，各随所属桌面层加载。
-- **影响：** Fcitx5 的实验性 `plasma` Classic UI 主题跟随 Plasma Shell 的 SVG 主题，而不读取桌面 shell 发布的门户深浅色或强调色；在 Niri 会话中它会回退到白色 `breeze-light` 和固定蓝色高亮。同步脚本监听本层 shell 写出的色表（DMS 是 `~/.local/share/color-schemes/DankMatugen.colors`，Noctalia 是它自己的 `kcolorscheme` 模板输出 `noctalia.colors`），根据同一文件的窗口背景亮度选择 `breeze-light` 或 `breeze-dark` 色表来组装私有主题；资源同时写入 Plasma 和 Fcitx 生成器的标准查找路径，并从该次色表读取选择前景/背景色来重着色候选项，最后调用 Fcitx `Controller1.Restart`。该接口与系统托盘的“重启”相同，会重新创建缓存 `NormalColor` 的 Classic UI，同时保留原实例的插件环境与输入法列表。这样不会因 shell 先写色表、后更新 dconf 而将浅色调色板配上深色背景，也不必手动重启输入法。两层生成的 Fcitx 主题目录都叫 `dms-plasma`：`~/.config/fcitx5/conf/classicui.conf` 是 Fcitx 自己写的运行时文件，其中 `Theme`/`DarkTheme` 已固定为这个名字，沿用它可以避免每次切换桌面都手改该文件；Noctalia 层只把内部使用的私有 Plasma SVG 主题命名为 `noctalia-fcitx-<mode>`。
+- **位置：** `modules/desktop/noctalia-with-niri/fcitx-theme-sync.nix`（`fcitx5-noctalia-theme-sync`）的用户 service 与 path unit，随该桌面层加载。
+- **影响：** Fcitx5 的实验性 `plasma` Classic UI 主题跟随 Plasma Shell 的 SVG 主题，而不读取桌面 shell 发布的门户深浅色或强调色；在 Niri 会话中它会回退到白色 `breeze-light` 和固定蓝色高亮。同步脚本监听 Noctalia 的 `kcolorscheme` 模板输出 `~/.local/share/color-schemes/noctalia.colors`，根据同一文件的窗口背景亮度选择 `breeze-light` 或 `breeze-dark` 色表来组装私有主题；资源同时写入 Plasma 和 Fcitx 生成器的标准查找路径，并从该次色表读取选择前景/背景色来重着色候选项，最后调用 Fcitx `Controller1.Restart`。该接口与系统托盘的“重启”相同，会重新创建缓存 `NormalColor` 的 Classic UI，同时保留原实例的插件环境与输入法列表。这样不会因 shell 先写色表、后更新 dconf 而将浅色调色板配上深色背景，也不必手动重启输入法。生成的 Fcitx 主题目录沿用 `dms-plasma` 这个名字：`~/.config/fcitx5/conf/classicui.conf` 是 Fcitx 自己写的运行时文件，其中 `Theme`/`DarkTheme` 已固定为这个名字，沿用它可以避免手改该文件；只把内部使用的私有 Plasma SVG 主题命名为 `noctalia-fcitx-<mode>`。
 - **上游没有 Fcitx5 模板：** Noctalia 5.2.1 的内置模板清单（`share/noctalia/assets/templates/builtin.toml`）只有终端、编辑器、合成器、GTK/Qt 与 KColorScheme 等 22 项，没有 fcitx5；官方文档全树搜 `fcitx` 无结果，社区模板与 260 个社区插件目录里也没有输入法主题，v5 同样没有 v4 那种用户自定义模板入口。二进制里唯一的 fcitx 代码是 `fcitx_status.cpp`，仅为顶栏的输入法状态指示。因此候选窗只能靠本脚本自行同步，数据源只能取 KColorScheme 模板的产物。
-- **范围：** 只使用已由 `fcitx5-configtool` 引入的 `libplasma`、`kconfig` 与 `kcolorscheme` 库，以及只用于重着色候选项 PNG 的 ImageMagick；不会安装或启动 Plasma Shell、KWin 或其他 KDE 桌面服务。同步 service 不直接由 `graphical-session.target` 启动，而仅由 path unit 在 shell 写入色表后触发；DMS 层若同时把同步 service 作为 target 成员并声明 `After=dms.service`，systemd 会形成排序循环并丢弃 DMS 的启动任务。Noctalia 层对 `noctalia.service` 只用 `After` 排序，它不是 target 成员，因此没有这个问题。
+- **范围：** 只使用已由 `fcitx5-configtool` 引入的 `libplasma`、`kconfig` 与 `kcolorscheme` 库，以及只用于重着色候选项 PNG 的 ImageMagick；不会安装或启动 Plasma Shell、KWin 或其他 KDE 桌面服务。同步 service 不直接由 `graphical-session.target` 启动，而仅由 path unit 在 shell 写入色表后触发。它对 `noctalia.service` 只用 `After` 排序，自身不是 target 成员，因此不会形成排序循环。
 - **选中候选词的文字颜色：** 候选词的文字颜色只由 `theme.conf` 的两个键决定：未选中用 `[InputPanel]` 的 `NormalColor`，选中用 `HighlightCandidateColor`（`inputwindow.cpp` 的 `table[highlight][type]`，`highlight` 为真时取后者）。生成器默认把两者写成同一个值，所以原本无需干预。此前脚本按「选中项用强调色」的想法把 `HighlightCandidateColor` 覆盖成选择前景色（强调色），但选中项背后的高亮块是 `highlight*.png` 这样一张 30% alpha 的位图叠在半透明面板上，实测合成底色远浅于纯强调色，深色桌面上强调色对它只有约 `1.7:1`，比修复前的白字还差。现改为让 `HighlightCandidateColor` 复用生成器算好的 `NormalColor`（用 `kreadconfig6` 按组读取，避免 `sed` 命中同名键），选中与未选中文字始终同色，深色主题白字、浅色主题黑字。实测四种组合（两层的深浅配色）最差 `5.2:1`，均过 WCAG AA；同一个值也用于候选词标签与注释（分别回退到 `HighlightCandidateText` 及其 60% alpha 版本）。**`HighlightColor` 与 `HighlightBackgroundColor` 不要跟着改**：它们服务 preedit 高亮（`TextFormatFlag::HighLight` 只由键盘引擎的客户端预编辑设置，且其 pango 背景是不透明的 `HighlightBackgroundColor`），那里强调色前景仍有约 `7:1`，因此继续用选择前景/背景色。注意 classicui 会跨配置重载缓存 `NormalColor`，改色依赖脚本末尾已有的 `Controller1.Restart`。
-- **高分辨率（@Nx）资源的坑：** fcitx5 `5.1.23` 起支持按显示缩放加载高分辨率位图（[fcitx5#1688](https://github.com/fcitx/fcitx5/pull/1688)，`theme.cpp` 的 `loadScaledImages` / `findScaledImage`）：生成器按 `SupportedScale` 额外写出 `highlight@2x.png` 等变体，classicui 再用 `ceil(显示缩放)` 选图。笔记本 eDP-1 为 `scale 1.5`（`~/.config/niri/dms/outputs.kdl`，由 DMS 运行时管理；Noctalia 桌面的缩放写在 `hosts/<host>/desktop/noctalia-with-niri/niri-host.kdl`），`ceil(1.5) = 2`，因此**实际生效的是 `@2x` 变体**，而非 `highlight.png`。修复前的 `mogrify` 只重着色 `highlight/highlight.png`，`@2x` 保持生成器原始的 breeze 蓝（`#3daee9`），表现为深浅色同步与强调色在候选窗上"失效"。现改为用 `highlight*.png` 通配逐个变体重着色。排查时注意：生成器的配色取自私有 Plasma 主题的 `colors` 文件，与 `~/.config/kdeglobals` 无关（已用注入实验证伪"KDE 遗留配置污染生成结果"的假设）。
+- **高分辨率（@Nx）资源的坑：** fcitx5 `5.1.23` 起支持按显示缩放加载高分辨率位图（[fcitx5#1688](https://github.com/fcitx/fcitx5/pull/1688)，`theme.cpp` 的 `loadScaledImages` / `findScaledImage`）：生成器按 `SupportedScale` 额外写出 `highlight@2x.png` 等变体，classicui 再用 `ceil(显示缩放)` 选图。笔记本 eDP-1 为 `scale 1.5`（写在 `hosts/<host>/desktop/noctalia-with-niri/niri-host.kdl`），`ceil(1.5) = 2`，因此**实际生效的是 `@2x` 变体**，而非 `highlight.png`。修复前的 `mogrify` 只重着色 `highlight/highlight.png`，`@2x` 保持生成器原始的 breeze 蓝（`#3daee9`），表现为深浅色同步与强调色在候选窗上"失效"。现改为用 `highlight*.png` 通配逐个变体重着色。排查时注意：生成器的配色取自私有 Plasma 主题的 `colors` 文件，与 `~/.config/kdeglobals` 无关（已用注入实验证伪"KDE 遗留配置污染生成结果"的假设）。
 - **移除条件：** 桌面 shell 提供原生 Fcitx5 模板（Noctalia 上游加入后即可删掉本层脚本），或 Fcitx5 的 Plasma 主题能直接根据 `org.freedesktop.appearance color-scheme` 选择浅/深资源。
-- **复查方法：** 暂停 path unit 后切换 shell 深浅色，确认候选窗不再变化；恢复后运行本层的 service（`systemctl --user start fcitx5-dms-theme-sync.service` 或 `fcitx5-noctalia-theme-sync.service`），检查 `~/.local/share/fcitx5/themes/dms-plasma/panel.png` 的背景随模式切换。**同时检查 `@Nx` 变体**：`highlight.png` 与 `highlight@2x.png` 的中心像素必须同为用户强调色（`magick highlight@2x.png -format '%[pixel:p{100,100}]' info:`），只查 `highlight.png` 会漏掉本坑。**再核对高亮文字**：`kreadconfig6 --file ~/.local/share/fcitx5/themes/dms-plasma/theme.conf --group InputPanel --key HighlightCandidateColor` 必须与同组 `NormalColor` 相等（深色配置为 `#fcfcfc`、浅色为 `#232629`），若等于 `Colors:Selection/ForegroundNormal` 就说明又回到文字压在 30% alpha 高亮块上的低对比状态。切换桌面后（例如从 `kde-plasma` 回到 `dms-with-niri`，或换到 `noctalia-with-niri`）需手动跑一次该 service 刷新残留的主题文件。
+- **复查方法：** 暂停 path unit 后切换 shell 深浅色，确认候选窗不再变化；恢复后运行本层的 service（`systemctl --user start fcitx5-noctalia-theme-sync.service`），检查 `~/.local/share/fcitx5/themes/dms-plasma/panel.png` 的背景随模式切换。**同时检查 `@Nx` 变体**：`highlight.png` 与 `highlight@2x.png` 的中心像素必须同为用户强调色（`magick highlight@2x.png -format '%[pixel:p{100,100}]' info:`），只查 `highlight.png` 会漏掉本坑。**再核对高亮文字**：`kreadconfig6 --file ~/.local/share/fcitx5/themes/dms-plasma/theme.conf --group InputPanel --key HighlightCandidateColor` 必须与同组 `NormalColor` 相等（深色配置为 `#fcfcfc`、浅色为 `#232629`），若等于 `Colors:Selection/ForegroundNormal` 就说明又回到文字压在 30% alpha 高亮块上的低对比状态。从 `kde-plasma` 切到 `noctalia-with-niri` 后需手动跑一次该 service 刷新残留的主题文件。
 
 ### Niri 配色改用自定义模板而非上游 `niri` 内置模板（Noctalia 层）
 
 - **位置：** `modules/desktop/noctalia-with-niri/niri-palette.kdl`（载荷副本）与 `default.nix` 里的自定义模板 `niri-colors`；消费方是 `niri-config.kdl` 开头的 `include "noctalia.kdl" optional=true`，`niri.nix` 在构建期渲染并校验它。
-- **影响：** Noctalia 5.2.1 的内置 `niri` 模板（`share/noctalia/assets/templates/niri/`）除渲染调色板外还有副作用：`apply.sh` 会把 `include "noctalia.kdl"` 追加到 `$XDG_CONFIG_HOME/niri/config.kdl`，`undo.sh` 会删掉该 include 并 `rm -f` 调色板文件；输出路径固定为 `~/.config/niri/noctalia.kdl`。而 `~/.config/niri/` 属于 `dms-with-niri`（决策 1：DMS 拥有该目录），在 Noctalia 会话里写入它会让两个桌面互相污染配色，切回 DMS 后 DMS 的配色会被 Noctalia 的 include 覆盖。
+- **影响：** Noctalia 5.2.1 的内置 `niri` 模板（`share/noctalia/assets/templates/niri/`）除渲染调色板外还有副作用：`apply.sh` 会把 `include "noctalia.kdl"` 追加到 `$XDG_CONFIG_HOME/niri/config.kdl`，`undo.sh` 会删掉该 include 并 `rm -f` 调色板文件；输出路径固定为 `~/.config/niri/noctalia.kdl`。而 `~/.config/niri/` 并不属于本会话（本层读 `~/.config/niri-noctalia/`），写进去只会留下无人读取的残留。
 - **当前处理：** 不启用该内置模板，把它的载荷原样复制为本层的 `niri-palette.kdl`，声明为等价的自定义模板并重定向输出到本层自己的 `~/.config/niri-noctalia/noctalia.kdl`。自定义模板不带任何 hook，因此不会触碰其它目录。niri 的 focus-ring、窗口边框、tab-indicator 与 recent-windows 高亮由此跟随配色。
-- **界面里仍能重新打开它：** 设置界面的模板页勾选内置 `niri` 会跑 `apply.sh`，把 include 追加进 DMS 的 `~/.config/niri/config.kdl` 并写出 `~/.config/niri/noctalia.kdl`，对本会话没有任何效果（本会话读 `~/.config/niri-noctalia/config.kdl`），只会在切回 DMS 时把 Noctalia 配色带过去。取消勾选会跑 `undo.sh`，由它删掉 include 与调色板文件，因此清理也跟着界面走；本层 `builtin_ids` 不含 `niri` 只对没有 `settings.toml` 的新设备生效，本机要生效必须在界面里取消勾选。
+- **界面里仍能重新打开它：** 设置界面的模板页勾选内置 `niri` 会跑 `apply.sh`，把 include 追加进 `~/.config/niri/config.kdl` 并写出 `~/.config/niri/noctalia.kdl`，对本会话没有任何效果（本会话读 `~/.config/niri-noctalia/config.kdl`）。取消勾选会跑 `undo.sh`，由它删掉 include 与调色板文件，因此清理也跟着界面走；本层 `builtin_ids` 不含 `niri` 只对没有 `settings.toml` 的新设备生效，本机要生效必须在界面里取消勾选。
 - **两个易踩的坑：** 其一，niri 的相对 include 按**传给 niri 的那条路径所在目录**解析，而 Home Manager 装的是指向 store 的软链，实测解析基准是软链所在目录（`~/.config/niri-noctalia/`）而非 store 里的真实文件所在目录，所以 `output_path` 与该 include 名必须对齐；构建期用「两个文件都就位时不得出现 `optional include not found`」断言这一点，因为可选 include 缺失只警告、退出码仍为 0，改名后会无声退回默认配色（`#7fc8ff` / `#505050` / `#9b0000`）。其二，模板引擎会对**整份文件**做词法分析，注释里的 `{{...}}` 也会被当成表达式，解析失败时它干脆不写文件，会话里不留任何错误，只能在构建期渲染一次才能发现。
-- **残留：** Noctalia 没有 `undo_hook` 之类的机制，切回 `dms-with-niri` 时 `~/.config/niri-noctalia/noctalia.kdl` 不会被删除。该文件对 DMS 惰性（DMS 不设 `NIRI_CONFIG`，读自己的 `~/.config/niri/config.kdl`），且其中的 `layout { border { ... } }` 只改颜色、不会打开边框，建议切换后手工删除。
+- **残留：** Noctalia 没有 `undo_hook` 之类的机制，停用本层或改用其它桌面时 `~/.config/niri-noctalia/noctalia.kdl` 不会被删除。该文件只被本层的可选 include 读取，残留是惰性的；仍建议手工删除。
 - **上游：** Noctalia 5.2.1 的 [内置模板目录](https://github.com/noctalia-dev/noctalia/tree/main/assets/templates/niri)（`niri.kdl` / `apply.sh` / `undo.sh`）；niri 的 [Include 文档](https://yalter.github.io/niri/Configuration:-Include.html)（`optional=true`、相对路径基准、缺失时监视并在文件出现后重载）。
 - **移除条件：** 上游模板支持自定义输出路径与关闭 include 副作用（例如不再向 `niri/config.kdl` 追加 include，或输出目录可配置），即可改回内置模板并删掉本层的载荷副本、自定义模板与可选 include。
 - **复查方法：** `nix build .#nixosConfigurations.vmware.config.system.build.toplevel` 应能渲染载荷并通过 `niri validate`；会话内 `ls -l ~/.config/niri-noctalia/noctalia.kdl` 应有该文件且 `grep active-color` 为当前强调色（由壁纸生成，深色 `m3-content` 下为 `#bcc2ff`）；`journalctl --user -u niri | grep "optional include not found"` 在首次渲染后应为空；`niri msg action load-config-file` 后窗口边框颜色应随之更新。注意没有查询主题的 IPC，颜色只能用截图比对默认值判断。
@@ -407,7 +402,7 @@
 ### Wine 应用的托盘图标经 XEmbed 桥接进入系统托盘
 
 - **位置：** `modules/optional/xembed-sni-proxy.nix`（由 `modules/home/mooling/default.nix` 导入）。
-- **影响：** Wine 程序调用 `Shell_NotifyIcon` 只能把托盘图标放进 XEmbed 系统托盘，而 niri 不提供托盘宿主：无人认领 X 服务器上的 `_NET_SYSTEM_TRAY_S0` 选择时，图标窗口会变成独立的 Xwayland 窗口在布局里漂浮。该单元运行 plasma-workspace 自带的 `xembedsniproxy`，由它认领选择、让应用把图标嵌入进去，再把每个图标转成 StatusNotifierItem，Noctalia（或 DMS）的托盘即可像原生托盘项一样显示。nixpkgs 没有独立的 `xembed-sni-proxy` 包，其 `snixembed` 是反方向（StatusNotifierItem 转 XEmbed，服务 X11 窗口管理器），因此二进制取自 `plasma-workspace`；该闭包本就在系统闭包内，不新增下载。
+- **影响：** Wine 程序调用 `Shell_NotifyIcon` 只能把托盘图标放进 XEmbed 系统托盘，而 niri 不提供托盘宿主：无人认领 X 服务器上的 `_NET_SYSTEM_TRAY_S0` 选择时，图标窗口会变成独立的 Xwayland 窗口在布局里漂浮。该单元运行 plasma-workspace 自带的 `xembedsniproxy`，由它认领选择、让应用把图标嵌入进去，再把每个图标转成 StatusNotifierItem，Noctalia 的托盘即可像原生托盘项一样显示。nixpkgs 没有独立的 `xembed-sni-proxy` 包，其 `snixembed` 是反方向（StatusNotifierItem 转 XEmbed，服务 X11 窗口管理器），因此二进制取自 `plasma-workspace`；该闭包本就在系统闭包内，不新增下载。
 - **相关提交：** `e5462e1`（`feat(tray): bridge XEmbed tray icons into the StatusNotifierItem tray`）。
 - **已知取舍：** XEmbed 图标是小位图，保持原始 22 到 24 像素尺寸，在 HiDPI 输出上偏软；应用托盘的右键菜单仍是 Xwayland 窗口，niri 会把它当作普通窗口显示在指针附近，而不是弹出菜单。代理启动前已在运行的应用需要重启，图标才会移入托盘。
 - **移除条件：** nixpkgs 提供独立的 `xembed-sni-proxy` 包，或不再使用需要托盘图标的 X11/Wine 应用。
@@ -422,8 +417,8 @@
 ### Home Manager 冲突备份后缀
 
 - **位置：** `modules/core.nix` 的 `home-manager.backupFileExtension = "backup"`。
-- **影响：** 激活时会将与 Home Manager 目标文件冲突的既有文件重命名为 `.backup`；原用于处理由 DMS/Niri 运行时管理的 `config.kdl` 冲突。
-- **相关提交：** `64177f6`（`fix: add home-manager.backupFileExtension to resolve config.kdl conflicts`）；`a383c84`（`fix!: stop declaratively managing DMS and NvChad runtime config`）移除了最初的配置冲突来源。运行时 Niri/DMS 配置已不再由 Home Manager 声明式管理，因此需重新确认该后缀是否仍有必要。
+- **影响：** 激活时会将与 Home Manager 目标文件冲突的既有文件重命名为 `.backup`；原用于处理由运行时管理的 `config.kdl` 冲突。
+- **相关提交：** `64177f6`（`fix: add home-manager.backupFileExtension to resolve config.kdl conflicts`）；`a383c84`（`fix!: stop declaratively managing DMS and NvChad runtime config`）移除了最初的配置冲突来源。运行时 niri 配置已不再由 Home Manager 声明式管理，DMS 桌面层也已移除，因此需重新确认该后缀是否仍有必要。
 - **移除条件：** 不存在其他需要保留的 Home Manager 目标文件冲突，且移除该选项后的 Home Manager 激活成功。
 - **复查方法：** 临时移除该选项后执行常规 `nixos-rebuild switch`；若激活报出文件冲突，先确认该目标文件是否应由 Home Manager 接管，再决定是否保留该后缀。
 
@@ -432,15 +427,15 @@
 - **位置：** `modules/desktop/noctalia-with-niri/greeter.nix`：选用 nixpkgs 自带的 `services.displayManager.dms-greeter`（`compositor.name = "niri"`），并用 `configHome` 复用 `~/.config/DankMaterialShell` 里既有的外观；同文件另启用 `getty@tty2` 作为逃生通道。
 - **影响：** noctalia-greeter 自带 `noctalia-greeter-compositor`（wlroots 0.20.2）。在 VMware 的 vmwgfx + SVGA3D 上它无法妥善处理 greeter 客户端交来的 dmabuf 缓冲：`close_all_bo_handles()`（`backend/drm/fb.c:107`）对 GBM 已关闭的 GEM handle 再关一次，vmwgfx 返回 `EINVAL`（日志为 `drmCloseBufferHandle failed: Invalid argument` 与 `[types/wlr_linux_dmabuf_v1.c:223] Failed to close buffer handle for plane 0`），随后合成器主动向客户端报协议错误（greeter 侧 `Wayland dispatch_pending failed: protocol error 7`），greeter 退出，greetd 报 `greeter exited without creating a session` 且**不重试**，表现为开机日志滚完后黑屏。
 - **两次绕过均失败（记录以免重走）：** 第一版导出 `WLR_SCENE_DISABLE_DIRECT_SCANOUT`、`WLR_DRM_NO_MODIFIERS`、`WLR_NO_HARDWARE_CURSORS`（三个名字逐个核对存在于 `libwlroots-0.20.2`），它们碰不到客户端缓冲导入，仍复现；第二版让两侧都离开 dmabuf（合成器 `WLR_RENDERER=pixman`、客户端 `LIBGL_ALWAYS_SOFTWARE=1`），同样复现。因此不再在该合成器上尝试。
-- **当前处理：** 改用 `dms-greeter`。它把界面跑在 **niri** 里，而 niri 基于 smithay 而非 wlroots，在这台 GPU 上正常（世代 27 的 DMS 会话即为长期证据）；`configHome` 指向用户家目录后，登录界面直接读现有的 `~/.config/DankMaterialShell/settings.json`、`~/.local/state/DankMaterialShell/session.json` 与 `~/.cache/DankMaterialShell/dms-colors.json`，外观与既有配置一致。Noctalia 会话本身不受影响。
+- **当前处理：** 改用 `dms-greeter`。它把界面跑在 **niri** 里，而 niri 基于 smithay 而非 wlroots，在这台 GPU 上正常（移除前的 DMS 会话即为长期证据）；`configHome` 指向用户家目录后，登录界面直接读现有的 `~/.config/DankMaterialShell/settings.json`、`~/.local/state/DankMaterialShell/session.json` 与 `~/.cache/DankMaterialShell/dms-colors.json`，外观与既有配置一致。Noctalia 会话本身不受影响。
 - **逃生通道：** 默认只在 tty1 起 getty，而 tty1 归 greetd，登录界面出问题时没有控制台可登录，因此启用 `getty@tty2`。注意**仅设 `enable = true` 不够**：NixOS 生成的模板实例单元没有 `[Install]` 段，`getty.target.wants/` 下不会出现链接，systemd 从不启动它（世代 29 实测如此）；必须同时声明 `wantedBy = [ "getty.target" ]`（世代 30 起已在 etc 中确认链接存在）。
 - **上游：** [noctalia-greeter](https://github.com/noctalia-dev/noctalia-greeter)（自带合成器 1.6.0）、wlroots 0.20.2、Mesa 的 `drmCloseBufferHandle`（[wlroots#3234](https://github.com/swaywm/wlroots/issues/3234) 即引入该调用的改动）。上游未见 VMware 报告，同类症状只有 [#149](https://github.com/noctalia-dev/noctalia-greeter/issues/149)。
-- **移除条件：** noctalia-greeter 或 wlroots 能在 vmwgfx 上正常导入客户端缓冲（启动日志不再出现上述两条错误且登录界面可用），即可改回 `services.displayManager.noctalia-greeter` 并删掉本层的 dms-greeter 接线；届时若已不需要 DMS 生态，`dms-greeter` 亦可一并移除。`getty@tty2` 可在登录界面不再脆弱后移除。
+- **移除条件：** noctalia-greeter 或 wlroots 能在 vmwgfx 上正常导入客户端缓冲（启动日志不再出现上述两条错误且登录界面可用），即可改回 `services.displayManager.noctalia-greeter` 并删掉本层的 dms-greeter 接线；届时 `dms-greeter` 亦可一并移除。`getty@tty2` 可在登录界面不再脆弱后移除。
 - **复查方法：** 重启后确认登录界面出现，`journalctl -b | grep -E "dms-greeter|greeter exited"` 无异常，`systemctl is-active getty@tty2` 为 active。仍黑屏时 Ctrl+Alt+F2 登录 tty2，跑 `~/check.sh`，或直接 `niri-session` 进入桌面。
 
 ### setuid 的 `pkexec` wrapper（nixpkgs 默认关闭）
 
-- **位置：** `modules/system/polkit.nix` 的 `security.polkit.enablePkexecWrapper = true`（两个主机都导入该模块）；对应的免密规则在 `modules/desktop/dms-with-niri/system.nix` 与 `modules/desktop/noctalia-with-niri/system.nix`。
+- **位置：** `modules/system/polkit.nix` 的 `security.polkit.enablePkexecWrapper = true`（两个主机都导入该模块）；对应的免密规则在 `modules/desktop/noctalia-with-niri/system.nix`。
 - **影响：** `gpu-screen-recorder` 的 nixpkgs wrapper 会把 `/run/wrappers/bin` 前置进 `PATH`，其二进制在 `gsr-kms-server` 缺少 `cap_sys_admin` 时通过 `pkexec` 提权（二进制内有 `pkexec` 与 `gsr-kms-server is missing sys_admin cap and will require root authentication` 字符串）。这个 nixpkgs 把该 wrapper 改成可选：`security.polkit.enablePkexecWrapper` 默认 `false`，`/run/wrappers/bin/` 里只有 `sudo` 与 `sudoedit`，于是 pkexec 不存在，桌面层那条免密规则永远不会被 polkit 询问到，录屏提权必然失败。
 - **当前处理：** 在共享系统模块里显式打开该选项，恢复 pkexec；授权链路不变，操作仍要经过 polkit，只有规则放行或认证代理批准才继续。
 - **上游：** nixpkgs 的 `nixos/modules/security/polkit.nix`（`enablePkexecWrapper` 选项，`security.wrappers.pkexec.enable` 直接取自它）；提权方式见 [gpu-screen-recorder](https://git.dec05eba.com/gpu-screen-recorder/about/) 关于 pkexec 与 `setcap cap_sys_admin+ep` 的说明。
@@ -465,6 +460,6 @@
 - **影响（输入法）：** WPS 自带一套定制的 Qt 5.12（`libQt5*Kso.so.5.12.12`），并自带 fcitx5 的 Qt 平台输入法插件 `office6/qt/plugins/platforminputcontexts/libfcitxplatforminputcontextplugin.so`，`office6/qt.conf` 也已经把 `Plugins` 指向该目录。但 Qt 不会自己选中这个插件，而会话里没有 `QT_IM_MODULE`（全局设置它会让其它 Qt 应用也走插件路径），结果 WPS 里完全打不出中文。插件说的是 fcitx5 的 DBus 接口，所以不需要 nixpkgs 的 `fcitx5-qt`：后者针对 Qt 5.15.19 编译并要求 `Qt_5.15` 符号，而 WPS 的 Qt 是 5.12.12，加载必然失败（`objdump -T` 预检结论）。
 - **影响（界面缩放）：** `QT_SCALE_FACTOR` 对 WPS **无效**，这条已被实测否定：`grep -ac SCALE_FACTOR` 在 `libQt5GuiKso.so.5.12.12`、`libQt5WidgetsKso.so.5.12.12`、`libQt5CoreKso.so.5.12.12` 上都是 `0`，而同一检查在 nixpkgs 的标准 `libQt5Gui.so.5`（5.15.19）上是 `1`，说明 WPS 定制 Qt 时把该环境变量裁掉了。WPS 认的是 `Xft.dpi`（`libQt5XcbQpaKso.so.5.12.12` 里含该字符串）。但 X resources 在本机从来没人加载：xwayland-satellite 按需启动，niri 之前也没有任何 `xrdb` 调用，`RESOURCE_MANAGER` 实测为空，`~/.Xresources` 里那份 `Xft.dpi: 144` 因此一直是死配置。现在由会话启动时的 `spawn-at-startup` 等 X server 就绪后合并该文件。
 - **相关提交：** `624eec3`（`fix(wps): restore CJK input and correct the UI scale in WPS`）引入输入法与最初的 `QT_SCALE_FACTOR` 尝试；`74e8f5c`（`fix(wps): load Xft.dpi into the X server instead of QT_SCALE_FACTOR`）改用 `Xft.dpi` 并接上加载动作。
-- **已知取舍：** `Xft.dpi` 是 X server 级别的资源，所有 X11 客户端都读它，这正是本意（让 X11 应用匹配 1.5 的合成器缩放）；Wayland 原生应用不受影响。`my.displayScale` 与 niri 输出块里的 `scale` 仍是两份声明（后者在 `hosts/<host>/desktop/noctalia-with-niri/niri-host.kdl`，KDL 无法插值），换显示器或改缩放时两处都要改；`Xft.dpi` 由 `my.displayScale` 推导，两者不会再各自漂移。dms-with-niri 桌面层读的是运行时管理的 niri 配置，没有这条 spawn 钩子，切回该层后 X resources 不会自动加载。
+- **已知取舍：** `Xft.dpi` 是 X server 级别的资源，所有 X11 客户端都读它，这正是本意（让 X11 应用匹配 1.5 的合成器缩放）；Wayland 原生应用不受影响。`my.displayScale` 与 niri 输出块里的 `scale` 仍是两份声明（后者在 `hosts/<host>/desktop/noctalia-with-niri/niri-host.kdl`，KDL 无法插值），换显示器或改缩放时两处都要改；`Xft.dpi` 由 `my.displayScale` 推导，两者不会再各自漂移。`kde-plasma` 桌面层没有这条 spawn 钩子，切到该层后 X resources 不会自动加载。
 - **移除条件：** nixpkgs 的 `wpsoffice-cn` 自带可用的输入法接线（上游补上 `QT_IM_MODULE`，或改成自己能选中插件）时，可以去掉对应 wrapper；如果 niri 或 xwayland-satellite 将来自己加载 X resources，可以删掉 `niri-config.kdl` 里的 `spawn-at-startup` 与 `niri.nix` 的 `@XRDB@` 占位符。`my.displayScale` 在没有其它使用者后可以一并移除。
 - **复查方法：** `xrdb -query | grep Xft.dpi` 应返回 `Xft.dpi: 144`（本机没有 xrdb，可用 `nix shell nixpkgs#xorg.xrdb` 临时取用）；`grep -a QT_IM_MODULE /nix/store/*-wpsoffice-cn-*/bin/wps` 应命中 wrapper；启动 WPS 后界面字号应与 Dolphin、Kate 等原生应用相当，切换 fcitx5 能输入中文且候选窗出现。若 `Xft.dpi` 为空，先确认 niri 配置里那条 `spawn-at-startup` 是否通过 `niri validate`，以及 X server 是否已经启动。

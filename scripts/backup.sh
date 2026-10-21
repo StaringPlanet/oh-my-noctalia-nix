@@ -9,8 +9,6 @@ Commands:
   snapshot              Run snapshot.sh for matching profiles.
   apply [-f|--force]    Run apply.sh for matching profiles.
   apply-missing         Restore missing config only, without confirmation.
-  niri-custom-snapshot  Snapshot the hand written niri overrides.
-  niri-custom-apply     Restore the hand written niri overrides.
 
 If no profile is provided, all profiles with the component scripts are used.
 EOF
@@ -20,10 +18,15 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
 profiles_root="$repo_root/user_profiles"
 
+# Component directory under user_profiles/<profile>/ holding the snapshot
+# scripts. Only niri-noctalia remains: the desktop-config component tracked the
+# runtime config of dms-with-niri and was removed together with that desktop
+# layer.
+component="niri-noctalia"
+
 run_for_profiles() {
-  local component="$1"
-  local script_name="$2"
-  shift 2
+  local script_name="$1"
+  shift
 
   local -a profiles=()
   while (($#)) && [[ "$1" != "--" ]]; do
@@ -67,9 +70,6 @@ run_for_profiles() {
 }
 
 run_apply() {
-  local component="$1"
-  shift
-
   local -a apply_args=()
   local -a profiles=()
 
@@ -99,7 +99,7 @@ run_apply() {
     shift
   done
 
-  run_for_profiles "$component" apply.sh "${profiles[@]}" -- "${apply_args[@]}"
+  run_for_profiles apply.sh "${profiles[@]}" -- "${apply_args[@]}"
 }
 
 if (($# == 0)); then
@@ -112,19 +112,13 @@ shift
 
 case "$command" in
   snapshot)
-    run_for_profiles desktop-config snapshot.sh "$@" --
+    run_for_profiles snapshot.sh "$@" --
     ;;
   apply)
-    run_apply desktop-config "$@"
+    run_apply "$@"
     ;;
   apply-missing)
-    run_for_profiles desktop-config apply.sh "$@" -- --force --missing-only
-    ;;
-  niri-custom-snapshot)
-    run_for_profiles niri-noctalia snapshot.sh "$@" --
-    ;;
-  niri-custom-apply)
-    run_apply niri-noctalia "$@"
+    run_for_profiles apply.sh "$@" -- --force --missing-only
     ;;
   -h|--help)
     usage

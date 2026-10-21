@@ -1,19 +1,11 @@
 {
-  description = "NixOS configuration for DankMaterialShell desktop";
+  description = "NixOS configuration for the Noctalia shell on niri";
 
   inputs = {
     # Use zstd tarball, see more in NixOS/nixpkgs#535272
     nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst";
     niri = {
       url = "github:sodiboo/niri-flake";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    dms = {
-      url = "github:AvengeMedia/DankMaterialShell";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    dgop = {
-      url = "github:AvengeMedia/dgop";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     home-manager = {
@@ -42,14 +34,6 @@
     };
     aagl = {
       url = "github:ezKEa/aagl-gtk-on-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    danksearch = {
-      url = "github:AvengeMedia/danksearch";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    dankcalendar = {
-      url = "github:AvengeMedia/dankcalendar";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     zen-browser = {

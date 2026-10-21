@@ -4,8 +4,7 @@
 #
 # Declarative niri session config for this desktop. The isolation strategy is
 # described in AGENTS.md, section "noctalia-with-niri 桌面层": this desktop reads
-# its own config file, while dms-with-niri keeps owning the default
-# ~/.config/niri/config.kdl.
+# its own config file instead of the default ~/.config/niri/config.kdl.
 
 let
   # The look declared by this desktop (see default.nix). Read back through

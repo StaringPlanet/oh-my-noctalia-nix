@@ -4,6 +4,13 @@
 
 由木泠深度定制的 NixOS × Noctalia Shell 桌面环境。
 
+## 支持的桌面模块
+
+- [Noctalia](https://noctalia.dev/) v5 + niri：完整，当前在 `hosts/vmware` 与 `hosts/mooling-laptop` 上启用
+- [KDE Plasma](https://wiki.nixos.cn/wiki/KDE)：仅系统层骨架，尚不推荐
+
+DMS（DankMaterialShell）桌面层已整体移除，只保留其登录器 `dms-greeter`（见下）。
+
 ## 设备身份：用户名与主机名
 
 `flake.nix` 只枚举 `hosts/` 下的主机目录，**不承载任何具体设备信息**。每台设备的身份写在自己的主机目录里：
@@ -53,20 +60,20 @@ in
 桌面相关配置分三层，新增或切换桌面时按此对应：
 
 ```text
-hosts/<hostname>/default.nix          # let desktop = "dms-with-niri"; 决定导入哪个桌面
+hosts/<hostname>/default.nix          # let desktop = "noctalia-with-niri"; 决定导入哪个桌面
 └── hosts/<hostname>/desktop/<name>/  # 主机专属的桌面追加配置
     └── modules/desktop/<name>/       # 桌面实现（系统层 + Home Manager 层）
 ```
 
-- **切换桌面**：只改 `hosts/<hostname>/default.nix` 顶部的 `let desktop = "..."`，它同时决定 `my.desktop` 的值与 `imports` 的路径。
-- **一致性校验（由实现模块直接断言）**：`modules/desktop/<name>/system.nix` 断言 `my.desktop` 等于 `baseNameOf ./.`，即「声明要用的桌面」必须等于「本实现实际所在的目录名」。桌面名无需手工维护，重命名实现目录后断言自动跟随；声明与实际不符（例如声明 `kde-plasma` 却导入了 `dms-with-niri` 的实现）会在求值阶段报错。
+- **切换桌面**：改 `hosts/<hostname>/default.nix` 顶部的 `let desktop = "..."`，它同时决定 `my.desktop` 的值与 `imports` 的路径；再把 `hosts/<hostname>/desktop/<name>/` 里需要的键（如 `./niri-host.nix`）加进同一份 `imports`，该目录不会自动加载。
+- **一致性校验（由实现模块直接断言）**：`modules/desktop/<name>/system.nix` 断言 `my.desktop` 等于 `baseNameOf ./.`，即「声明要用的桌面」必须等于「本实现实际所在的目录名」。桌面名无需手工维护，重命名实现目录后断言自动跟随；声明与实际不符（例如声明 `kde-plasma` 却导入了 `noctalia-with-niri` 的实现）会在求值阶段报错。
 - **兜底校验**：`modules/system/config.nix` 断言至少有一个实现被加载。若 `hosts/<hostname>/desktop/<name>/default.nix` 忘了导入 `modules/desktop/<name>/system.nix`（或路径写错被 `optionalImports` 静默跳过），此时实现模块不存在、它自己的断言也不会执行，只能由这条兜底。
 
 ### 桌面专属的 Home Manager 配置
 
-桌面实现层（`modules/desktop/<name>/system.nix`）通过 `home-manager.sharedModules` 把自己专属的 Home Manager 模块挂进用户环境，例如 `dms-with-niri` 会挂上 `./default.nix`（`dms-with-niri` 的 HM 层）以及上游 `inputs.dms` / `inputs.danksearch` / `inputs.dankcalendar` 的模块。
+桌面实现层（`modules/desktop/<name>/system.nix`）通过 `home-manager.sharedModules` 把自己专属的 Home Manager 模块挂进用户环境，例如 `noctalia-with-niri` 会挂上 `./default.nix` 及其 `imports` 里的 niri、终端、Qt/GTK、门户、包、fcitx 配色同步与深浅色模块。
 
-**这是刻意的设计约束**：全局接线模块 `modules/core.nix` 的 `home-manager.users.<name>.imports` 只放桌面无关的模块（`./modules/home`、`nvchad`、`codex-desktop`）。任何 DMS 生态的模块若写在那里，切换桌面后仍会生效，曾经因此出现过「切到 KDE 后 `dms.service`、`dsearch.service`、`fcitx5-dms-theme-sync` 依旧存在」的问题。同理，桌面专属的 `home.activation` 步骤（如 `restoreDesktopConfig`）也必须放在桌面层内。
+**这是刻意的设计约束**：全局接线模块 `modules/core.nix` 的 `home-manager.users.<name>.imports` 只放桌面无关的模块（`./modules/home`、`nvchad`、`codex-desktop`）。任何 shell 生态的模块若写在那里，切换桌面后仍会生效，历史上曾因此让桌面层的服务与激活步骤泄漏到 KDE。同理，桌面专属的 `home.activation` 步骤也必须放在桌面层内。
 
 系统层模块通过 `specialArgs` 拿到 `inputs`，因此可以直接引用自己桌面所需的 input，无需在全局接线层（`flake.nix` / `modules/core.nix`）为它额外加 overlay 或 `extraSpecialArgs`。
 
@@ -74,13 +81,13 @@ hosts/<hostname>/default.nix          # let desktop = "dms-with-niri"; 决定导
 
 ### noctalia-with-niri（Noctalia v5 + niri）
 
-备用桌面层，已在 `hosts/vmware` 与 `hosts/mooling-laptop` 上启用：shell 取自锁定的 nixpkgs（Noctalia v5），登录器为 `services.displayManager.dms-greeter`（界面跑在 niri 里；`noctalia-greeter` 自带的 wlroots 合成器在 `hosts/vmware` 的 vmwgfx 上不可用，原因见 `MAINTENANCE.md`），不新增 flake input，运行配置同样交给应用自己管理。切换主机只需把 `hosts/<host>/default.nix` 顶部的 `let desktop` 改成 `"noctalia-with-niri"`，并在 `hosts/<host>/desktop/noctalia-with-niri/` 准备同名目录。与 DMS 层的移植取舍及已知缺口见 `AGENTS.md` 的「noctalia-with-niri 桌面层」。
+当前唯一的完整桌面层，已在 `hosts/vmware` 与 `hosts/mooling-laptop` 上启用：shell 取自锁定的 nixpkgs（Noctalia v5），登录器为 `services.displayManager.dms-greeter`（界面跑在 niri 里；`noctalia-greeter` 自带的 wlroots 合成器在 `hosts/vmware` 的 vmwgfx 上不可用，原因见 `MAINTENANCE.md`），不新增 flake input。外观声明进 `~/.config/noctalia/config.toml`，图形界面的改动写入优先级更高的 `~/.local/state/noctalia/settings.toml`；niri 配置也是声明式的（`~/.config/niri-noctalia/config.kdl`），只留一个可写 `custom.kdl` 供手工叠加。切换主机只需把 `hosts/<host>/default.nix` 顶部的 `let desktop` 改成 `"noctalia-with-niri"`，并在 `hosts/<host>/desktop/noctalia-with-niri/` 准备同名目录。移植取舍与已知缺口见 `AGENTS.md` 的「noctalia-with-niri 桌面层」。
 
 ## 新机器部署
 
 ```fish
 # 1. 安装 NixOS 后，克隆配置仓库
-git clone git@github.com:Mooling0602/dms-starter.git ~/nixos-config
+git clone https://github.com/StaringPlanet/oh-my-noctalia-nix.git ~/nixos-config
 
 # 2. 运行交互式部署脚本即可
 cd ~/nixos-config && ./deploy.sh
@@ -145,15 +152,15 @@ du -sh /nix/store                                             # nix store 大小
 
 ## 配置边界
 
-- DMS/Niri 运行配置不由 Home Manager 挂载；`~/.config/niri/` 和 DMS 自身配置文件由应用自己写入。
 - Noctalia 会话的 niri 配置是声明式的，另留一个可写的 `~/.config/niri-noctalia/custom.kdl` 用来手写覆盖；窗口规则可以用 NiriMod 图形化编辑，它默认就写这个文件（Noctalia 自身没有该编辑器）。
-- DMS/Niri 可变配置快照保存在 `user_profiles/mooling/desktop-config/`，仅用于备份和审查。
+- 默认的 `~/.config/niri/` 不由本仓库管理：没有模块读写它，也没有对应的快照往返。
+- `~/.config/niri-noctalia/custom.kdl` 的快照保存在 `user_profiles/mooling/niri-noctalia/`，仅用于备份和审查。
 - NvChad Lua 配置来自独立仓库 `github:Mooling0602/NvCfg`，本仓库只保留 `nix4nvchad` 包装和运行时依赖。
-- 终端分两层：`modules/home/defaults/terminal.nix` 定义终端程序、字体与桌面无关的偏好；跟随桌面会话的配色放在各桌面模块内（如 `modules/desktop/dms-with-niri/terminal.nix` 引用 DMS matugen 生成的配色文件），由 Home Manager 自动合并。
+- 终端分两层：`modules/home/defaults/terminal.nix` 定义终端程序、字体与桌面无关的偏好；跟随桌面会话的配色放在各桌面模块内（如 `modules/desktop/noctalia-with-niri/terminal.nix` 引用 Noctalia 模板渲染出的配色文件），由 Home Manager 自动合并。
 
 ## 人脸认证
 
-已启用 [Howdy](https://github.com/boltgolt/howdy) 的 PAM 认证，适用于 `sudo`、本机锁屏和 SSH 等使用 PAM 的服务。DMS Greeter 及其复用的 `login` 认证栈排除 Howdy，必须输入密码，以便自动解锁 GNOME Keyring。其余服务中，人脸认证成功可直接放行，识别失败时仍会要求输入密码。
+已启用 [Howdy](https://github.com/boltgolt/howdy) 的 PAM 认证，适用于 `sudo`、本机锁屏和 SSH 等使用 PAM 的服务。登录器（`dms-greeter`）及其复用的 `login` 认证栈排除 Howdy，必须输入密码，以便自动解锁 GNOME Keyring；Noctalia 的锁屏走同一个 `login` 栈，因此也一律要求密码。其余服务中，人脸认证成功可直接放行，识别失败时仍会要求输入密码。
 
 认证开始时会显示 Howdy 的检测提示；若画面太暗或识别超时，则输入密码继续。录入多个光照和角度的样本可提高识别率。
 
@@ -175,27 +182,17 @@ sudo howdy remove mooling
 
 > 主要是 mooling 个人使用，你可以根据需要复制模板或自行编写模块。
 
+DMS 桌面层移除后，唯一的运行时快照是 Noctalia 会话里唯一可写的那份 niri 覆盖。
+
 ```fish
-# 捕获当前 DMS/Niri 可变配置到仓库快照
-./scripts/backup.sh snapshot mooling
-
-# 从仓库快照恢复；如果已有相关配置，会二次确认（N/y）
-./scripts/backup.sh apply mooling
-
-# 跳过二次确认，强制恢复
-./scripts/backup.sh apply --force mooling
-
-# 单独备份/恢复 Noctalia 会话的手写 niri 覆盖（~/.config/niri-noctalia/custom.kdl）
+# 备份/恢复 Noctalia 会话的手写 niri 覆盖（~/.config/niri-noctalia/custom.kdl）
 ./scripts/backup.sh niri-custom-snapshot mooling
 ./scripts/backup.sh niri-custom-apply mooling
 ```
 
 - `snapshot.sh` 直接覆盖仓库快照中有变化的文件，不做二次确认。
-- `apply.sh` 默认在已有 DMS/Niri 配置时要求二次确认；`-f` 或 `--force` 可跳过确认。
-- 两者位于各用户的 `user_profiles/<username>/desktop-config/` 下，`scripts/backup.sh` 负责按用户分发调用。
-- `niri-custom-*` 对应 `user_profiles/<username>/niri-noctalia/`，只处理 Noctalia 会话的手写 niri 覆盖这一个文件；恢复前会先用 `niri validate` 校验快照，校验不过则拒绝覆盖，避免写坏配置导致下次登录退回 niri 默认配置。
-- `modules/desktop/dms-with-niri/backup.nix` 在 Home Manager 激活时检查用户名；若用户名匹配且 DMS 或 Niri 配置缺失，会自动执行 `apply-missing` 并跳过二次确认。它随 DMS 桌面层加载，切到其他桌面时该激活步骤不会执行。
-- 当前 DMS 快照只保留 `settings.json` 和插件 `.meta`，不提交 `plugin_settings.json`、浏览器 CSS、插件仓库缓存等易变或可能含设备标识的文件。
+- `apply.sh` 默认在目标文件已存在时要求二次确认；`-f` 或 `--force` 可跳过确认。子命令由 `scripts/backup.sh` 按用户分发到 `user_profiles/<username>/niri-noctalia/`。
+- 恢复前会在临时目录里连同真实的 `config.kdl`、`host.kdl`、`noctalia.kdl` 一起跑 `niri validate`（用 `cp -L`，否则符号链接会校验错路径），校验不过则拒绝覆盖：写坏 `custom.kdl` 会让下次登录退回 niri 内置默认配置。
 
 ## 参考
 

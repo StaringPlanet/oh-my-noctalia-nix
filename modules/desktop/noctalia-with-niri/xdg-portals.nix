@@ -2,10 +2,10 @@
 
 # Home-manager module, has been imported in noctalia-with-niri.
 #
-# Portals for a niri session. This is the same set the DMS layer uses, since
-# none of it depends on the shell: the file chooser and Settings go to KDE/GTK,
-# screen capture to the GNOME backend, and InputCapture to nix-packages'
-# niri-input-portal.
+# Portals for a niri session: none of this depends on the shell, so the set
+# stays as it was when the previous shell used the same session. The file
+# chooser and Settings go to KDE/GTK, screen capture to the GNOME backend, and
+# InputCapture to nix-packages' niri-input-portal.
 
 {
   xdg.portal = {

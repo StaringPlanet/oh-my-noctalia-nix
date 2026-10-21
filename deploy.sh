@@ -211,7 +211,7 @@ DEFAULT_HOSTNAME="$(existing_hostname)"
 DEFAULT_DESKTOP="$(flake_desktop)"
 [ -n "$DEFAULT_USERNAME" ] || die "无法从 hosts/*/default.nix 读取 my.username 默认值。"
 [ -n "$DEFAULT_HOSTNAME" ] || die "无法从 hosts/*/ 的目录名确定主机名默认值。"
-DEFAULT_DESKTOP="${DEFAULT_DESKTOP:-dms-with-niri}"
+DEFAULT_DESKTOP="${DEFAULT_DESKTOP:-noctalia-with-niri}"
 
 # --------------------------------- 2. 用户名、主机名与桌面模块（1.1.1/1.1.2）
 

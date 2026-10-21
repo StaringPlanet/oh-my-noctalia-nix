@@ -2,8 +2,9 @@ final: prev:
 
 {
   qt6Packages = prev.qt6Packages // {
-    # DMS generates KDE .colors files for qt6ct. Upstream qt6ct
-    # cannot read them without the qt6ct-kde compatibility patch.
+    # Noctalia's kcolorscheme and qt templates generate KDE .colors files for
+    # qt6ct. Upstream qt6ct cannot read them without the qt6ct-kde
+    # compatibility patch.
     qt6ct = prev.qt6Packages.qt6ct.overrideAttrs (previousAttrs: {
       buildInputs = (previousAttrs.buildInputs or [ ]) ++ [
         final.kdePackages.kconfig

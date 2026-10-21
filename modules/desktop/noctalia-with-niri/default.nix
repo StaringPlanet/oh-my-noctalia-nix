@@ -83,8 +83,8 @@ in
         mode = "auto";
 
         # Derive the palette from the wallpaper, like the matugen theming of the
-        # DMS session did. Use source = "builtin" plus builtin = "<name>" for a
-        # fixed palette such as Noctalia or Catppuccin instead.
+        # shell this desktop replaced did. Use source = "builtin" plus
+        # builtin = "<name>" for a fixed palette such as Noctalia or Catppuccin.
         source = "wallpaper";
         wallpaper_scheme = "m3-content";
 
@@ -97,10 +97,10 @@ in
         #
         # The built-in niri template is deliberately not enabled: besides
         # rendering the palette it appends `include "noctalia.kdl"` to
-        # ~/.config/niri/config.kdl, which belongs to dms-with-niri, and it can
-        # only write to that same directory. "niri-colors" below is the
-        # equivalent user template with both paths redirected into this
-        # desktop's own config directory.
+        # ~/.config/niri/config.kdl and can only write to that same directory,
+        # which would tie this session to a runtime directory it does not read.
+        # "niri-colors" below is the equivalent user template with both paths
+        # redirected into this desktop's own config directory.
         templates = {
           enable_builtin_templates = true;
           builtin_ids = [
@@ -147,12 +147,12 @@ in
           ];
 
           # niri-palette.kdl is the payload of the built-in niri template minus
-          # the hook that writes into the other desktop's config. A relative
-          # input resolves against the directory of the config file itself, so
-          # the file is installed next to config.toml by the xdg.configFile
-          # entry below; the output is the file that niri-config.kdl includes
-          # optionally. No hooks, so nothing outside this desktop's own
-          # directories is touched.
+          # the hook that writes into the default ~/.config/niri/ directory. A
+          # relative input resolves against the directory of the config file
+          # itself, so the file is installed next to config.toml by the
+          # xdg.configFile entry below; the output is the file that
+          # niri-config.kdl includes optionally. No hooks, so nothing outside
+          # this desktop's own directories is touched.
           user.niri-colors = {
             input_path = "niri-palette.kdl";
             output_path = "$XDG_CONFIG_HOME/niri-noctalia/noctalia.kdl";

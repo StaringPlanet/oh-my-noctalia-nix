@@ -1,4 +1,4 @@
-# NixOS Configuration: dms-starter
+# NixOS Configuration: oh-my-noctalia-nix
 
 [简体中文](README.md) | English
 
@@ -6,9 +6,10 @@ A modular NixOS Flake configuration template that supports multiple users, multi
 
 ## Supported desktop modules
 
-- [DankMaterialShell](https://danklinux.com/) is complete and actively maintained
 - [Noctalia](https://noctalia.dev/) v5 + niri is complete and enabled on hosts/vmware and hosts/mooling-laptop
-- [KDE Plasma](https://wiki.nixos.cn/wiki/KDE) is a work in progress and not yet recommended
+- [KDE Plasma](https://wiki.nixos.cn/wiki/KDE) is a system-layer skeleton only and not yet recommended
+
+The DankMaterialShell (DMS) desktop layer has been removed entirely; only its login greeter `dms-greeter` remains (see below).
 
 ## Device identity: username and hostname
 
@@ -22,7 +23,7 @@ let
   # Desktop module in use, matching ./desktop/<desktop>/.
   # Must be a let binding: imports evaluate before config, so referring to
   # config.my.desktop here would recurse infinitely.
-  desktop = "dms-with-niri";
+  desktop = "noctalia-with-niri";
 in
 
 {
@@ -60,20 +61,20 @@ Adding a device only requires creating a new `hosts/<hostname>/default.nix`, wit
 Desktop-related configuration has three layers. When adding or switching a desktop, map them as follows:
 
 ```text
-hosts/<hostname>/default.nix          # let desktop = "dms-with-niri"; decides which desktop is imported
+hosts/<hostname>/default.nix          # let desktop = "noctalia-with-niri"; decides which desktop is imported
 └── hosts/<hostname>/desktop/<name>/  # host-specific desktop additions
     └── modules/desktop/<name>/       # desktop implementation (system layer + Home Manager layer)
 ```
 
-- **Switching desktops**: change only the `let desktop = "..."` binding at the top of `hosts/<hostname>/default.nix`; it determines both the value of `my.desktop` and the `imports` path.
-- **Consistency check (asserted by the implementation module itself)**: `modules/desktop/<name>/system.nix` asserts that `my.desktop` equals `baseNameOf ./.`, meaning "the desktop declared for use" must equal "the directory name this implementation actually lives in". The desktop name needs no manual maintenance, and the assertion follows automatically if the implementation directory is renamed; a mismatch between declaration and reality (for example declaring `kde-plasma` while importing the `dms-with-niri` implementation) fails at evaluation time.
+- **Switching desktops**: change the `let desktop = "..."` binding at the top of `hosts/<hostname>/default.nix`; it determines both the value of `my.desktop` and the `imports` path. Then add the keys you need from `hosts/<hostname>/desktop/<name>/` (for example `./niri-host.nix`) to the same `imports` list, since that directory is not picked up automatically.
+- **Consistency check (asserted by the implementation module itself)**: `modules/desktop/<name>/system.nix` asserts that `my.desktop` equals `baseNameOf ./.`, meaning "the desktop declared for use" must equal "the directory name this implementation actually lives in". The desktop name needs no manual maintenance, and the assertion follows automatically if the implementation directory is renamed; a mismatch between declaration and reality (for example declaring `kde-plasma` while importing the `noctalia-with-niri` implementation) fails at evaluation time.
 - **Fallback check**: `modules/system/config.nix` asserts that at least one implementation is loaded. If `hosts/<hostname>/desktop/<name>/default.nix` forgets to import `modules/desktop/<name>/system.nix` (or the path is wrong and silently skipped by `optionalImports`), the implementation module does not exist and its own assertion never runs, so only this fallback can catch it.
 
 ### Desktop-specific Home Manager configuration
 
-The desktop implementation layer (`modules/desktop/<name>/system.nix`) mounts its own Home Manager modules into the user environment through `home-manager.sharedModules`. For example, `dms-with-niri` mounts `./default.nix` (the HM layer of `dms-with-niri`) plus the upstream `inputs.dms`, `inputs.danksearch`, and `inputs.dankcalendar` modules.
+The desktop implementation layer (`modules/desktop/<name>/system.nix`) mounts its own Home Manager modules into the user environment through `home-manager.sharedModules`. For example, `noctalia-with-niri` mounts `./default.nix` plus the niri, terminal, Qt/GTK, portal, package, fcitx color sync and light/dark modules listed in its `imports`.
 
-**This is a deliberate design constraint**: `home-manager.users.<name>.imports` in the global wiring module `modules/core.nix` only holds desktop-agnostic modules (`./modules/home`, `nvchad`, `codex-desktop`). Any DMS ecosystem module written there would still take effect after switching desktops, which previously caused the problem that `dms.service`, `dsearch.service`, and `fcitx5-dms-theme-sync` remained after switching to KDE. By the same reasoning, desktop-specific `home.activation` steps (such as `restoreDesktopConfig`) must also live inside the desktop layer.
+**This is a deliberate design constraint**: `home-manager.users.<name>.imports` in the global wiring module `modules/core.nix` only holds desktop-agnostic modules (`./modules/home`, `nvchad`, `codex-desktop`). Any shell ecosystem module written there would still take effect after switching desktops, which historically leaked desktop-layer services and activation steps into KDE. By the same reasoning, desktop-specific `home.activation` steps must also live inside the desktop layer.
 
 System-layer modules receive `inputs` through `specialArgs`, so they can reference the inputs their own desktop needs directly, with no extra overlay or `extraSpecialArgs` for that desktop in the global wiring layer (`flake.nix` / `modules/core.nix`).
 
@@ -81,13 +82,13 @@ System-layer modules receive `inputs` through `specialArgs`, so they can referen
 
 ### noctalia-with-niri (Noctalia v5 + niri)
 
-A secondary desktop layer, enabled on hosts/vmware and hosts/mooling-laptop: the shell comes from the pinned nixpkgs (Noctalia v5) and the login screen is `services.displayManager.dms-greeter`, which runs inside niri (`noctalia-greeter` ships its own wlroots compositor, which cannot run on the vmwgfx of hosts/vmware, see `MAINTENANCE.md`). No new flake input is needed, and the runtime configuration is owned by the applications just like the DMS layer. Switching a host only requires changing the `let desktop` binding at the top of `hosts/<host>/default.nix` to `"noctalia-with-niri"` and preparing a matching directory under `hosts/<host>/desktop/noctalia-with-niri/`. The porting decisions taken from the DMS layer and the known gaps are documented in `AGENTS.md` under "noctalia-with-niri 桌面层".
+The only complete desktop layer, enabled on hosts/vmware and hosts/mooling-laptop: the shell comes from the pinned nixpkgs (Noctalia v5) and the login screen is `services.displayManager.dms-greeter`, which runs inside niri (`noctalia-greeter` ships its own wlroots compositor, which cannot run on the vmwgfx of hosts/vmware, see `MAINTENANCE.md`). No new flake input is needed. The look is declared in `~/.config/noctalia/config.toml`, while changes made in the GUI land in the higher-priority `~/.local/state/noctalia/settings.toml`; the niri configuration is declarative too (`~/.config/niri-noctalia/config.kdl`), with a single writable `custom.kdl` for hand-written overrides. Switching a host only requires changing the `let desktop` binding at the top of `hosts/<host>/default.nix` to `"noctalia-with-niri"` and preparing a matching directory under `hosts/<host>/desktop/noctalia-with-niri/`. The porting decisions and the known gaps are documented in `AGENTS.md` under "noctalia-with-niri 桌面层".
 
 ## Deploying a new machine
 
 ```fish
 # 1. After installing NixOS, clone the configuration repository
-git clone git@github.com:Mooling0602/dms-starter.git ~/nixos-config
+git clone https://github.com/StaringPlanet/oh-my-noctalia-nix.git ~/nixos-config
 
 # 2. Run the interactive deploy script
 cd ~/nixos-config && ./deploy.sh
@@ -152,14 +153,15 @@ du -sh /nix/store                                             # nix store size
 
 ## Configuration boundaries
 
-- DMS/Niri runtime configuration is not mounted by Home Manager; `~/.config/niri/` and the DMS configuration files are written by the applications themselves.
-- Mutable DMS/Niri configuration snapshots are kept in `user_profiles/mooling/desktop-config/`, for backup and review only.
+- The niri configuration of the Noctalia session is declarative, with one writable `~/.config/niri-noctalia/custom.kdl` for hand-written overrides; window rules can be edited graphically with NiriMod, which writes that file by default (Noctalia has no editor of its own).
+- The default `~/.config/niri/` is not managed by this repository: no module reads or writes it, and there is no snapshot round trip for it.
+- The snapshot of `~/.config/niri-noctalia/custom.kdl` lives in `user_profiles/mooling/niri-noctalia/`, for backup and review only.
 - NvChad Lua configuration comes from the separate repository `github:Mooling0602/NvCfg`; this repository only keeps the `nix4nvchad` wrapper and runtime dependencies.
-- The terminal is split into two layers: `modules/home/defaults/terminal.nix` defines the terminal program, fonts, and desktop-agnostic preferences; colors that follow the desktop session live in each desktop module (for example `modules/desktop/dms-with-niri/terminal.nix` references the color files generated by DMS matugen), and Home Manager merges both sides automatically.
+- The terminal is split into two layers: `modules/home/defaults/terminal.nix` defines the terminal program, fonts, and desktop-agnostic preferences; colors that follow the desktop session live in each desktop module (for example `modules/desktop/noctalia-with-niri/terminal.nix` references the color files rendered by the Noctalia templates), and Home Manager merges both sides automatically.
 
 ## Face authentication
 
-PAM authentication through [Howdy](https://github.com/boltgolt/howdy) is enabled for services that use PAM, such as `sudo`, the local lock screen, and SSH. The DMS Greeter and the `login` authentication stack it reuses exclude Howdy and always require a password, so that GNOME Keyring can be unlocked automatically. For the other services, a successful face match lets the request through, while a failed match still asks for a password.
+PAM authentication through [Howdy](https://github.com/boltgolt/howdy) is enabled for services that use PAM, such as `sudo`, the local lock screen, and SSH. The login greeter (`dms-greeter`) and the `login` authentication stack it reuses exclude Howdy and always require a password, so that GNOME Keyring can be unlocked automatically; the Noctalia lock screen uses the same `login` stack and therefore always asks for a password as well. For the other services, a successful face match lets the request through, while a failed match still asks for a password.
 
 Howdy shows its detection prompt when authentication starts; if the scene is too dark or recognition times out, enter a password to continue. Enrolling several samples under different lighting and angles improves the recognition rate.
 
@@ -181,25 +183,20 @@ sudo howdy remove mooling
 
 > Mainly for mooling's personal use. You can copy the template or write your own modules as needed.
 
+With the DMS desktop layer gone, the only runtime snapshot left is the single writable niri overlay of the Noctalia session.
+
 ```fish
-# Capture the current mutable DMS/Niri configuration into the repository snapshot
-./scripts/backup.sh snapshot mooling
-
-# Restore from the repository snapshot; asks for confirmation (N/y) if related config already exists
-./scripts/backup.sh apply mooling
-
-# Skip the confirmation and force a restore
-./scripts/backup.sh apply --force mooling
+# Back up / restore the hand-written niri overrides of the Noctalia session (~/.config/niri-noctalia/custom.kdl)
+./scripts/backup.sh niri-custom-snapshot mooling
+./scripts/backup.sh niri-custom-apply mooling
 ```
 
 - `snapshot.sh` overwrites changed files in the repository snapshot directly, with no confirmation.
-- `apply.sh` asks for confirmation by default when DMS/Niri configuration already exists; `-f` or `--force` skips it.
-- Both live under each user's `user_profiles/<username>/desktop-config/`, and `scripts/backup.sh` dispatches to them per user.
-- `modules/desktop/dms-with-niri/backup.nix` checks the username during Home Manager activation; if the username matches and DMS or Niri configuration is missing, it runs `apply-missing` automatically and skips the confirmation. It is loaded with the DMS desktop layer, so this activation step does not run after switching to another desktop.
-- The current DMS snapshot keeps only `settings.json` and plugin `.meta` files, and does not commit `plugin_settings.json`, browser CSS, plugin repository caches, or other files that are volatile or may carry device identifiers.
+- `apply.sh` asks for confirmation by default when the target file already exists; `-f` or `--force` skips it. `scripts/backup.sh` dispatches the subcommands to `user_profiles/<username>/niri-noctalia/` per user.
+- Before restoring, the snapshot is validated together with the real `config.kdl`, `host.kdl` and `noctalia.kdl` in a scratch directory (`cp -L`, otherwise symlinks make it validate the wrong paths); a snapshot that fails to validate is refused, because a broken `custom.kdl` makes the next login fall back to niri's stock defaults.
 
 ## References
 
-- [DankMaterialShell documentation](https://danklinux.com/docs/)
+- [Noctalia documentation](https://docs.noctalia.dev)
 - [niri documentation](https://github.com/YaLTeR/niri)
 - [NixOS Wiki](https://nixos.wiki/)

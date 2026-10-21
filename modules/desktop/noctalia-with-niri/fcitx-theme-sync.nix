@@ -14,12 +14,13 @@
 # for KDE-styled components. That file is rendered by the shell whenever the
 # palette changes, which is what the path unit below watches.
 #
-# The generated theme deliberately keeps the directory name the DMS layer uses:
+# The generated theme keeps a directory name inherited from the shell this
+# desktop replaced:
 # ~/.config/fcitx5/conf/classicui.conf is a runtime file (Fcitx writes it from
 # its own settings dialog) that pins Theme and DarkTheme to "dms-plasma".
-# Reusing the name means switching desktops stays a one-line `let` change
-# instead of another manual edit of that file. Only the private Plasma SVG theme
-# the generator reads is namespaced per desktop (noctalia-fcitx-<mode>).
+# Reusing the name means an existing session keeps working without another
+# manual edit of that file. Only the private Plasma SVG theme the generator
+# reads is namespaced per desktop (noctalia-fcitx-<mode>).
 #
 # The sync service is not attached to graphical-session.target; only the path
 # unit triggers it, which keeps it out of the session startup ordering. The
