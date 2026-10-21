@@ -1,14 +1,8 @@
-# NixOS Configuration: dms-starter
+# NixOS Configuration: oh-my-noctalia-nix
 
 简体中文 | [English](README_en_US.md)
 
-一份可自由组合桌面模块的 NixOS Flake 配置模板，支持多用户、多设备和可选桌面模块的灵活组合。
-
-## 支持的桌面模块
-
-- [DankMaterialShell](https://danklinux.com/) 已完成，持续维护
-- [Noctalia](https://noctalia.dev/) v5 + niri 已完成，目前在 `hosts/vmware` 与 `hosts/mooling-laptop` 上启用
-- [KDE Plasma](https://wiki.nixos.cn/wiki/KDE) 工作中，尚不推荐使用
+由木泠深度定制的 NixOS × Noctalia Shell 桌面环境。
 
 ## 设备身份：用户名与主机名
 
@@ -21,7 +15,7 @@
 let
   # 本机使用的桌面模块名，对应 ./desktop/<desktop>/。
   # 必须是 let 绑定：imports 求值早于 config，写成 config.my.desktop 会无限递归。
-  desktop = "dms-with-niri";
+  desktop = "noctalia-with-niri";
 in
 
 {
@@ -205,6 +199,6 @@ sudo howdy remove mooling
 
 ## 参考
 
-- [DankMaterialShell 文档](https://danklinux.com/docs/)
+- [Noctalia 文档](https://docs.noctalia.dev)
 - [niri 文档](https://github.com/YaLTeR/niri)
 - [NixOS Wiki](https://nixos.wiki/)
